@@ -63,6 +63,7 @@ vi.mock("./runtime.js", () => ({
       whatsapp: {
         sendMessageWhatsApp: vi.fn(),
         createLoginTool: vi.fn(),
+        getActiveWebListener: vi.fn(),
       },
     },
   })),
@@ -146,5 +147,71 @@ describe("whatsapp resolveTarget", () => {
   installCommonResolveTargetErrorCases({
     resolveTarget,
     implicitAllowFrom: ["5511999999999"],
+  });
+});
+
+import { getWhatsAppRuntime } from "./runtime.js";
+
+const listGroupsLive = whatsappPlugin.directory!.listGroupsLive!;
+
+describe("whatsapp directory listGroupsLive", () => {
+  it("should resolve group JID by name when listener is active", async () => {
+    const mockListener = {
+      resolveGroupByName: vi.fn(async (name: string) => {
+        if (name === "Engineering") {
+          return { jid: "123456789-123456@g.us", subject: "Engineering" };
+        }
+        return null;
+      }),
+    };
+    vi.mocked(getWhatsAppRuntime().channel.whatsapp.getActiveWebListener).mockReturnValue(
+      mockListener as any,
+    );
+
+    const result = await listGroupsLive({
+      accountId: "default",
+      query: "Engineering",
+      cfg: {} as any,
+      runtime: {} as any,
+    });
+
+    expect(result).toEqual([
+      {
+        id: "123456789-123456@g.us",
+        kind: "group",
+        name: "Engineering",
+        handle: "Engineering",
+        raw: { jid: "123456789-123456@g.us", subject: "Engineering" },
+      },
+    ]);
+    expect(mockListener.resolveGroupByName).toHaveBeenCalledWith("Engineering");
+  });
+
+  it("should return empty array if listener is not active or group not found", async () => {
+    // listener active but group not found
+    const mockListener = {
+      resolveGroupByName: vi.fn(async () => null),
+    };
+    vi.mocked(getWhatsAppRuntime().channel.whatsapp.getActiveWebListener).mockReturnValue(
+      mockListener as any,
+    );
+
+    let result = await listGroupsLive({
+      accountId: "default",
+      query: "Unknown Group",
+      cfg: {} as any,
+      runtime: {} as any,
+    });
+    expect(result).toEqual([]);
+
+    // listener not active
+    vi.mocked(getWhatsAppRuntime().channel.whatsapp.getActiveWebListener).mockReturnValue(null);
+    result = await listGroupsLive({
+      accountId: "default",
+      query: "Engineering",
+      cfg: {} as any,
+      runtime: {} as any,
+    });
+    expect(result).toEqual([]);
   });
 });

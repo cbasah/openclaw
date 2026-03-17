@@ -232,6 +232,10 @@ import {
   WebLoginStartParamsSchema,
   type WebLoginWaitParams,
   WebLoginWaitParamsSchema,
+  type ChannelsDirectoryListParams,
+  ChannelsDirectoryListParamsSchema,
+  type ChannelsDirectoryListResult,
+  ChannelsDirectoryListResultSchema,
   type WizardCancelParams,
   WizardCancelParamsSchema,
   type WizardNextParams,
@@ -420,6 +424,12 @@ export const validateUpdateRunParams = ajv.compile<UpdateRunParams>(UpdateRunPar
 export const validateWebLoginStartParams =
   ajv.compile<WebLoginStartParams>(WebLoginStartParamsSchema);
 export const validateWebLoginWaitParams = ajv.compile<WebLoginWaitParams>(WebLoginWaitParamsSchema);
+export const validateChannelsDirectoryListParams = ajv.compile<ChannelsDirectoryListParams>(
+  ChannelsDirectoryListParamsSchema,
+);
+export const validateChannelsDirectoryListResult = ajv.compile<ChannelsDirectoryListResult>(
+  ChannelsDirectoryListResultSchema,
+);
 
 export function formatValidationErrors(errors: ErrorObject[] | null | undefined) {
   if (!errors?.length) {
@@ -520,6 +530,8 @@ export {
   ChannelsLogoutParamsSchema,
   WebLoginStartParamsSchema,
   WebLoginWaitParamsSchema,
+  ChannelsDirectoryListParamsSchema,
+  ChannelsDirectoryListResultSchema,
   AgentSummarySchema,
   AgentsFileEntrySchema,
   AgentsCreateParamsSchema,
@@ -610,6 +622,8 @@ export type {
   ChannelsLogoutParams,
   WebLoginStartParams,
   WebLoginWaitParams,
+  ChannelsDirectoryListParams,
+  ChannelsDirectoryListResult,
   AgentSummary,
   AgentsFileEntry,
   AgentsCreateParams,

@@ -183,3 +183,31 @@ export const WebLoginWaitParamsSchema = Type.Object(
   },
   { additionalProperties: false },
 );
+
+export const ChannelsDirectoryListParamsSchema = Type.Object(
+  {
+    channel: NonEmptyString,
+    accountId: Type.Optional(Type.String()),
+    kind: Type.Union([Type.Literal("user"), Type.Literal("group")]),
+    query: Type.Optional(Type.String()),
+    limit: Type.Optional(Type.Integer({ minimum: 1 })),
+  },
+  { additionalProperties: false },
+);
+
+export const ChannelDirectoryEntrySchema = Type.Object(
+  {
+    kind: Type.Union([Type.Literal("user"), Type.Literal("group")]),
+    id: NonEmptyString,
+    name: Type.Optional(Type.String()),
+    handle: Type.Optional(Type.String()),
+  },
+  { additionalProperties: true },
+);
+
+export const ChannelsDirectoryListResultSchema = Type.Object(
+  {
+    entries: Type.Array(ChannelDirectoryEntrySchema),
+  },
+  { additionalProperties: false },
+);

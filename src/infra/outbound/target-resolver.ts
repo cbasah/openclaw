@@ -5,7 +5,10 @@ import type {
   ChannelId,
 } from "../../channels/plugins/types.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import { callGateway } from "../../gateway/call.js";
+import { validateChannelsDirectoryListResult } from "../../gateway/protocol/index.js";
 import { defaultRuntime, type RuntimeEnv } from "../../runtime.js";
+import { type GatewayClientMode, type GatewayClientName } from "../../utils/message-channel.js";
 import { buildDirectoryCacheKey, DirectoryCache } from "./directory-cache.js";
 import { ambiguousTargetError, unknownTargetError } from "./target-errors.js";
 import {
@@ -13,6 +16,15 @@ import {
   normalizeChannelTargetInput,
   normalizeTargetForProvider,
 } from "./target-normalization.js";
+
+export type TargetResolverGateway = {
+  url?: string;
+  token?: string;
+  timeoutMs?: number;
+  clientName: GatewayClientName;
+  clientDisplayName?: string;
+  mode: GatewayClientMode;
+};
 
 export type TargetResolveKind = ChannelDirectoryEntryKind | "channel";
 
@@ -36,6 +48,7 @@ export async function resolveChannelTarget(params: {
   accountId?: string | null;
   preferredKind?: TargetResolveKind;
   runtime?: RuntimeEnv;
+  gateway?: TargetResolverGateway;
 }): Promise<ResolveMessagingTargetResult> {
   return resolveMessagingTarget(params);
 }
@@ -258,14 +271,44 @@ async function listDirectoryEntries(params: {
   runtime?: RuntimeEnv;
   query?: string;
   source: "cache" | "live";
+  gateway?: TargetResolverGateway;
 }): Promise<ChannelDirectoryEntry[]> {
+  const useLive = params.source === "live";
+
+  if (useLive && params.gateway) {
+    try {
+      const payload = await callGateway({
+        config: params.cfg,
+        method: "channels.directory.list",
+        requiredMethods: ["channels.directory.list"],
+        params: {
+          channel: params.channel,
+          accountId: params.accountId ?? undefined,
+          kind: params.kind,
+          query: params.query,
+        },
+        timeoutMs: params.gateway.timeoutMs ?? 10_000,
+        url: params.gateway.url,
+        token: params.gateway.token,
+        clientName: params.gateway.clientName,
+        mode: params.gateway.mode,
+      });
+
+      if (validateChannelsDirectoryListResult(payload)) {
+        return payload.entries;
+      }
+    } catch (err) {
+      // Fallback to local if gateway fails, but usually we are here BECAUSE local won't work
+      params.runtime?.log(`[TARGET RESOLVER] gateway directory.list failed: ${String(err)}`);
+    }
+  }
+
   const plugin = getChannelPlugin(params.channel);
   const directory = plugin?.directory;
   if (!directory) {
     return [];
   }
   const runtime = params.runtime ?? defaultRuntime;
-  const useLive = params.source === "live";
   const fn =
     params.kind === "user"
       ? useLive
@@ -294,6 +337,7 @@ async function getDirectoryEntries(params: {
   query?: string;
   runtime?: RuntimeEnv;
   preferLiveOnMiss?: boolean;
+  gateway?: TargetResolverGateway;
 }): Promise<ChannelDirectoryEntry[]> {
   const signature = buildTargetResolverSignature(params.channel);
   const listParams = {
@@ -318,6 +362,7 @@ async function getDirectoryEntries(params: {
   const entries = await listDirectoryEntries({
     ...listParams,
     source: "cache",
+    gateway: params.gateway,
   });
   if (entries.length > 0 || !params.preferLiveOnMiss) {
     directoryCache.set(cacheKey, entries, params.cfg);
@@ -330,10 +375,15 @@ async function getDirectoryEntries(params: {
     source: "live",
     signature,
   });
+  console.log(
+    `[TARGET RESOLVER] Requesting live entries for channel: ${listParams.channel}, query: ${listParams.query}`,
+  );
   const liveEntries = await listDirectoryEntries({
     ...listParams,
     source: "live",
+    gateway: params.gateway,
   });
+  console.log(`[TARGET RESOLVER] Got ${liveEntries.length} live entries`);
   directoryCache.set(liveKey, liveEntries, params.cfg);
   directoryCache.set(cacheKey, liveEntries, params.cfg);
   return liveEntries;
@@ -384,6 +434,7 @@ export async function resolveMessagingTarget(params: {
   preferredKind?: TargetResolveKind;
   runtime?: RuntimeEnv;
   resolveAmbiguous?: ResolveAmbiguousMode;
+  gateway?: TargetResolverGateway;
 }): Promise<ResolveMessagingTargetResult> {
   const raw = normalizeChannelTargetInput(params.input);
   if (!raw) {
@@ -455,6 +506,7 @@ export async function resolveMessagingTarget(params: {
     query,
     runtime: params.runtime,
     preferLiveOnMiss: true,
+    gateway: params.gateway,
   });
   const match = resolveMatch({ channel: params.channel, entries, query });
   if (match.kind === "single") {

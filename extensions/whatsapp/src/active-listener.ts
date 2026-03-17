@@ -25,6 +25,7 @@ export type ActiveWebListener = {
     participant?: string,
   ) => Promise<void>;
   sendComposingTo: (to: string) => Promise<void>;
+  resolveGroupByName?: (name: string) => Promise<{ jid: string; subject: string } | null>;
   close?: () => Promise<void>;
 };
 

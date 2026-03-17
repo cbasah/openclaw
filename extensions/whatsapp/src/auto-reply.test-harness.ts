@@ -20,11 +20,12 @@ type AnyExport = any;
 type MockWebListener = {
   close: () => Promise<void>;
   onClose: Promise<WebListenerCloseReason>;
-  signalClose: () => void;
-  sendMessage: () => Promise<{ messageId: string }>;
-  sendPoll: () => Promise<{ messageId: string }>;
-  sendReaction: () => Promise<void>;
-  sendComposingTo: () => Promise<void>;
+  signalClose: (reason?: WebListenerCloseReason) => void;
+  sendMessage: (to: string, text: string) => Promise<{ messageId: string }>;
+  sendPoll: (to: string, poll: any) => Promise<{ messageId: string }>;
+  sendReaction: (chatJid: string, messageId: string, emoji: string) => Promise<void>;
+  sendComposingTo: (to: string) => Promise<void>;
+  resolveGroupByName: (name: string) => Promise<{ jid: string; subject: string } | null>;
 };
 
 export const TEST_NET_IP = "203.0.113.10";
@@ -162,7 +163,7 @@ export function createWebListenerFactoryCapture(): AnyExport {
     onMessage: (msg: WebInboundMessage) => Promise<void>;
   }) => {
     capturedOnMessage = opts.onMessage;
-    return { close: vi.fn() };
+    return createMockWebListener();
   };
 
   return {
@@ -180,6 +181,7 @@ export function createMockWebListener(): MockWebListener {
     sendPoll: vi.fn(async () => ({ messageId: "poll-1" })),
     sendReaction: vi.fn(async () => undefined),
     sendComposingTo: vi.fn(async () => undefined),
+    resolveGroupByName: vi.fn(async () => null),
   };
 }
 

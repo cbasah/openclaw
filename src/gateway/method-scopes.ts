@@ -54,6 +54,7 @@ const METHOD_SCOPE_GROUPS: Record<OperatorScope, readonly string[]> = {
     "doctor.memory.status",
     "logs.tail",
     "channels.status",
+    "channels.directory.list",
     "status",
     "usage.status",
     "usage.cost",

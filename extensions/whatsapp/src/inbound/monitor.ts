@@ -35,6 +35,9 @@ export async function monitorWebInbox(options: {
   /** Optional debounce gating predicate. */
   shouldDebounce?: (msg: WebInboundMessage) => boolean;
 }) {
+  console.log(
+    "#################################### monitorWebInbox #######################################################",
+  );
   const inboundLogger = getChildLogger({ module: "web-inbound" });
   const inboundConsoleLog = createSubsystemLogger("gateway/channels/whatsapp").child("inbound");
   const sock = await createWaSocket(false, options.verbose, {
@@ -487,6 +490,29 @@ export async function monitorWebInbox(options: {
     onClose,
     signalClose: (reason?: WebListenerCloseReason) => {
       resolveClose(reason ?? { status: undefined, isLoggedOut: false, error: "closed" });
+    },
+    resolveGroupByName: async (name: string) => {
+      try {
+        const groups = await sock.groupFetchAllParticipating();
+        const lowerQuery = name.trim().toLowerCase();
+
+        // Exact match first
+        for (const [jid, group] of Object.entries(groups)) {
+          if (group.subject?.trim().toLowerCase() === lowerQuery) {
+            return { jid, subject: group.subject };
+          }
+        }
+
+        // Fallback to substring match
+        for (const [jid, group] of Object.entries(groups)) {
+          if (group.subject?.toLowerCase().includes(lowerQuery)) {
+            return { jid, subject: group.subject };
+          }
+        }
+      } catch (err) {
+        logVerbose(`Failed to resolve group by name '${name}': ${String(err)}`);
+      }
+      return null;
     },
     // IPC surface (sendMessage/sendPoll/sendReaction/sendComposingTo)
     ...sendApi,

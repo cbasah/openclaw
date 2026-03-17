@@ -19,6 +19,7 @@ import {
   formatValidationErrors,
   validateChannelsLogoutParams,
   validateChannelsStatusParams,
+  validateChannelsDirectoryListParams,
 } from "../protocol/index.js";
 import { formatForLog } from "../ws-log.js";
 import type { GatewayRequestContext, GatewayRequestHandlers } from "./types.js";
@@ -285,6 +286,54 @@ export const channelsHandlers: GatewayRequestHandlers = {
         plugin,
       });
       respond(true, payload, undefined);
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, formatForLog(err)));
+    }
+  },
+  "channels.directory.list": async ({ params, respond }) => {
+    if (!validateChannelsDirectoryListParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid channels.directory.list params: ${formatValidationErrors(validateChannelsDirectoryListParams.errors)}`,
+        ),
+      );
+      return;
+    }
+    const p = params as {
+      channel: ChannelId;
+      accountId?: string;
+      kind: "user" | "group";
+      query?: string;
+      limit?: number;
+    };
+    const plugin = getChannelPlugin(p.channel);
+    if (!plugin?.directory) {
+      respond(true, { entries: [] }, undefined);
+      return;
+    }
+    const cfg = loadConfig();
+    const runtime = defaultRuntime;
+    const listParams = {
+      cfg,
+      accountId: p.accountId,
+      query: p.query,
+      limit: p.limit,
+      runtime,
+    };
+    try {
+      const fn =
+        p.kind === "user"
+          ? (plugin.directory.listPeersLive ?? plugin.directory.listPeers)
+          : (plugin.directory.listGroupsLive ?? plugin.directory.listGroups);
+      if (!fn) {
+        respond(true, { entries: [] }, undefined);
+        return;
+      }
+      const entries = await fn(listParams);
+      respond(true, { entries }, undefined);
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, formatForLog(err)));
     }

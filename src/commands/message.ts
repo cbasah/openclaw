@@ -45,6 +45,7 @@ export async function messageCommand(
       action,
       params: opts,
       deps: outboundDeps,
+      runtime,
       gateway: {
         clientName: GATEWAY_CLIENT_NAMES.CLI,
         mode: GATEWAY_CLIENT_MODES.CLI,

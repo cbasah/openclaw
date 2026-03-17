@@ -18,6 +18,7 @@ import { hasPollCreationParams, resolveTelegramPollVisibility } from "../../poll
 import { resolvePollMaxSelections } from "../../polls.js";
 import { buildChannelAccountBindings } from "../../routing/bindings.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
+import { type RuntimeEnv } from "../../runtime.js";
 import { type GatewayClientMode, type GatewayClientName } from "../../utils/message-channel.js";
 import { throwIfAborted } from "./abort.js";
 import {
@@ -95,6 +96,7 @@ export type RunMessageActionParams = {
   requesterSenderId?: string | null;
   toolContext?: ChannelThreadingToolContext;
   gateway?: MessageActionRunnerGateway;
+  runtime?: RuntimeEnv;
   deps?: OutboundSendDeps;
   sessionKey?: string;
   agentId?: string;
@@ -235,6 +237,8 @@ async function resolveActionTarget(params: {
   action: ChannelMessageActionName;
   args: Record<string, unknown>;
   accountId?: string | null;
+  gateway?: MessageActionRunnerGateway;
+  runtime?: RuntimeEnv;
 }): Promise<ResolvedMessagingTarget | undefined> {
   let resolvedTarget: ResolvedMessagingTarget | undefined;
   const toRaw = typeof params.args.to === "string" ? params.args.to.trim() : "";
@@ -244,6 +248,8 @@ async function resolveActionTarget(params: {
       channel: params.channel,
       input: toRaw,
       accountId: params.accountId ?? undefined,
+      gateway: params.gateway,
+      runtime: params.runtime,
     });
     if (resolved.ok) {
       params.args.to = resolved.target.to;
@@ -261,6 +267,8 @@ async function resolveActionTarget(params: {
       input: channelIdRaw,
       accountId: params.accountId ?? undefined,
       preferredKind: "group",
+      gateway: params.gateway,
+      runtime: params.runtime,
     });
     if (resolved.ok) {
       if (resolved.target.kind === "user") {
@@ -339,6 +347,7 @@ async function handleBroadcastAction(
           cfg: input.cfg,
           channel: targetChannel,
           input: target,
+          gateway: input.gateway,
         });
         if (!resolved.ok) {
           throw resolved.error;
@@ -759,6 +768,8 @@ export async function runMessageAction(
     action,
     args: params,
     accountId,
+    gateway: input.gateway,
+    runtime: input.runtime,
   });
 
   enforceCrossContextPolicy({

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelDirectoryEntry } from "../../channels/plugins/types.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import { callGateway } from "../../gateway/call.js";
 import { resetDirectoryCache, resolveMessagingTarget } from "./target-resolver.js";
 
 const mocks = vi.hoisted(() => ({
@@ -15,14 +16,18 @@ vi.mock("../../channels/plugins/index.js", () => ({
   normalizeChannelId: (value: string) => value,
 }));
 
-describe("resolveMessagingTarget (directory fallback)", () => {
+vi.mock("../../gateway/call.js", () => ({
+  callGateway: vi.fn(),
+}));
+
+describe("target-resolver", () => {
   const cfg = {} as OpenClawConfig;
 
   beforeEach(() => {
-    mocks.listGroups.mockClear();
-    mocks.listGroupsLive.mockClear();
-    mocks.resolveTarget.mockClear();
-    mocks.getChannelPlugin.mockClear();
+    mocks.listGroups.mockReset();
+    mocks.listGroupsLive.mockReset();
+    mocks.resolveTarget.mockReset();
+    mocks.getChannelPlugin.mockReset();
     resetDirectoryCache();
     mocks.getChannelPlugin.mockReturnValue({
       directory: {
@@ -35,90 +40,135 @@ describe("resolveMessagingTarget (directory fallback)", () => {
         },
       },
     });
-  });
-
-  it("uses live directory fallback and caches the result", async () => {
-    const entry: ChannelDirectoryEntry = { kind: "group", id: "123456789", name: "support" };
     mocks.listGroups.mockResolvedValue([]);
-    mocks.listGroupsLive.mockResolvedValue([entry]);
-
-    const first = await resolveMessagingTarget({
-      cfg,
-      channel: "discord",
-      input: "support",
-    });
-
-    expect(first.ok).toBe(true);
-    if (first.ok) {
-      expect(first.target.source).toBe("directory");
-      expect(first.target.to).toBe("123456789");
-    }
-    expect(mocks.listGroups).toHaveBeenCalledTimes(1);
-    expect(mocks.listGroupsLive).toHaveBeenCalledTimes(1);
-
-    const second = await resolveMessagingTarget({
-      cfg,
-      channel: "discord",
-      input: "support",
-    });
-
-    expect(second.ok).toBe(true);
-    expect(mocks.listGroups).toHaveBeenCalledTimes(1);
-    expect(mocks.listGroupsLive).toHaveBeenCalledTimes(1);
+    mocks.listGroupsLive.mockResolvedValue([]);
   });
 
-  it("skips directory lookup for direct ids", async () => {
-    const result = await resolveMessagingTarget({
-      cfg,
-      channel: "discord",
-      input: "123456789",
+  describe("resolveMessagingTarget (directory fallback)", () => {
+    it("uses live directory fallback and caches the result", async () => {
+      const entry: ChannelDirectoryEntry = { kind: "group", id: "123456789", name: "support" };
+      mocks.listGroups.mockResolvedValue([]);
+      mocks.listGroupsLive.mockResolvedValue([entry]);
+
+      const first = await resolveMessagingTarget({
+        cfg,
+        channel: "discord",
+        input: "support",
+      });
+
+      expect(first.ok).toBe(true);
+      if (first.ok) {
+        expect(first.target.source).toBe("directory");
+        expect(first.target.to).toBe("123456789");
+      }
+      expect(mocks.listGroups).toHaveBeenCalledTimes(1);
+      expect(mocks.listGroupsLive).toHaveBeenCalledTimes(1);
+
+      const second = await resolveMessagingTarget({
+        cfg,
+        channel: "discord",
+        input: "support",
+      });
+
+      expect(second.ok).toBe(true);
+      expect(mocks.listGroups).toHaveBeenCalledTimes(1);
+      expect(mocks.listGroupsLive).toHaveBeenCalledTimes(1);
     });
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.target.source).toBe("normalized");
-      expect(result.target.to).toBe("123456789");
-    }
-    expect(mocks.listGroups).not.toHaveBeenCalled();
-    expect(mocks.listGroupsLive).not.toHaveBeenCalled();
-  });
+    it("skips directory lookup for direct ids", async () => {
+      const result = await resolveMessagingTarget({
+        cfg,
+        channel: "discord",
+        input: "123456789",
+      });
 
-  it("lets plugins override id-like target resolution before falling back to raw ids", async () => {
-    mocks.getChannelPlugin.mockReturnValue({
-      messaging: {
-        targetResolver: {
-          looksLikeId: () => true,
-          resolveTarget: mocks.resolveTarget,
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.target.source).toBe("normalized");
+        expect(result.target.to).toBe("123456789");
+      }
+      expect(mocks.listGroups).not.toHaveBeenCalled();
+      expect(mocks.listGroupsLive).not.toHaveBeenCalled();
+    });
+
+    it("lets plugins override id-like target resolution before falling back to raw ids", async () => {
+      mocks.getChannelPlugin.mockReturnValue({
+        messaging: {
+          targetResolver: {
+            looksLikeId: () => true,
+            resolveTarget: mocks.resolveTarget,
+          },
         },
-      },
-    });
-    mocks.resolveTarget.mockResolvedValue({
-      to: "user:dm-user-id",
-      kind: "user",
-      source: "directory",
-    });
-
-    const result = await resolveMessagingTarget({
-      cfg,
-      channel: "mattermost",
-      input: "dthcxgoxhifn3pwh65cut3ud3w",
-    });
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.target).toEqual({
+      });
+      mocks.resolveTarget.mockResolvedValue({
         to: "user:dm-user-id",
         kind: "user",
         source: "directory",
-        display: undefined,
       });
-    }
-    expect(mocks.resolveTarget).toHaveBeenCalledWith(
-      expect.objectContaining({
+
+      const result = await resolveMessagingTarget({
+        cfg,
+        channel: "mattermost",
         input: "dthcxgoxhifn3pwh65cut3ud3w",
-      }),
-    );
-    expect(mocks.listGroups).not.toHaveBeenCalled();
-    expect(mocks.listGroupsLive).not.toHaveBeenCalled();
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.target).toEqual({
+          to: "user:dm-user-id",
+          kind: "user",
+          source: "directory",
+          display: undefined,
+        });
+      }
+      expect(mocks.resolveTarget).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: "dthcxgoxhifn3pwh65cut3ud3w",
+        }),
+      );
+      expect(mocks.listGroups).not.toHaveBeenCalled();
+      expect(mocks.listGroupsLive).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("resolveMessagingTarget (gateway bridge)", () => {
+    const cfg = {} as OpenClawConfig;
+    const gateway = {
+      clientName: "test" as const,
+      mode: "test" as const,
+    };
+
+    beforeEach(() => {
+      vi.mocked(callGateway).mockClear();
+      resetDirectoryCache();
+    });
+
+    it("calls gateway for live lookup when gateway is provided", async () => {
+      const entry: ChannelDirectoryEntry = { kind: "group", id: "gw-123", name: "gw-group" };
+      vi.mocked(callGateway).mockResolvedValue({
+        entries: [entry],
+      });
+
+      const result = await resolveMessagingTarget({
+        cfg,
+        channel: "whatsapp",
+        input: "gw-group",
+        gateway,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.target.to).toBe("gw-123");
+      }
+      expect(callGateway).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: "channels.directory.list",
+          params: expect.objectContaining({
+            channel: "whatsapp",
+            query: "gw-group",
+          }),
+        }),
+      );
+    });
   });
 });

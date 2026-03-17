@@ -242,6 +242,31 @@ export const whatsappPlugin: ChannelPlugin<ResolvedWhatsAppAccount> = {
     },
     listPeers: async (params) => listWhatsAppDirectoryPeersFromConfig(params),
     listGroups: async (params) => listWhatsAppDirectoryGroupsFromConfig(params),
+    listGroupsLive: async ({ cfg, accountId, query }) => {
+      if (!query) {
+        return [];
+      }
+      try {
+        const resolvedAccountId = accountId || resolveDefaultWhatsAppAccountId(cfg);
+        const listener =
+          getWhatsAppRuntime().channel.whatsapp.getActiveWebListener(resolvedAccountId);
+        if (listener?.resolveGroupByName) {
+          const resolved = await listener.resolveGroupByName(query);
+          if (resolved) {
+            return [
+              {
+                kind: "group",
+                id: resolved.jid,
+                name: resolved.subject,
+              },
+            ];
+          }
+        }
+      } catch (err) {
+        // Ignore lookup failures if the socket is not ready
+      }
+      return [];
+    },
   },
   actions: {
     listActions: ({ cfg }) => {

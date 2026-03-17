@@ -201,6 +201,7 @@ export async function monitorWebChannel(
       debounceMs: inboundDebounceMs,
       shouldDebounce,
       onMessage: async (msg: WebInboundMsg) => {
+        console.log(`######################## onMessage() ###########################`);
         handledMessages += 1;
         lastMessageAt = Date.now();
         status.lastMessageAt = lastMessageAt;
