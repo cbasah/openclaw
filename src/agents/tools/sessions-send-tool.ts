@@ -72,7 +72,7 @@ export function createSessionsSendTool(opts?: {
     label: "Session Send",
     name: "sessions_send",
     description:
-      "Send a message into another session. Use sessionKey or label to identify the target.",
+      "Send a message into another EXISTING active session. Use sessionKey or label to identify the target. For new messaging targets, groups, or phone numbers that don't have an active session yet, use the 'message' tool instead.",
     parameters: SessionsSendToolSchema,
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;

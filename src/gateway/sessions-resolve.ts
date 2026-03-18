@@ -1,5 +1,9 @@
+import { resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { listChannelPlugins } from "../channels/plugins/index.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { loadSessionStore, updateSessionStore } from "../config/sessions.js";
+import { resolveMessagingTarget } from "../infra/outbound/target-resolver.js";
+import { buildAgentPeerSessionKey } from "../routing/session-key.js";
 import { parseSessionLabel } from "../sessions/session-label.js";
 import {
   ErrorCodes,
@@ -20,6 +24,10 @@ export async function resolveSessionKeyFromResolveParams(params: {
   cfg: OpenClawConfig;
   p: SessionsResolveParams;
 }): Promise<SessionsResolveResult> {
+  console.log(
+    `#################### resolveSessionKeyFromResolveParams() #######################################`,
+  );
+
   const { cfg, p } = params;
 
   const key = typeof p.key === "string" ? p.key.trim() : "";
@@ -126,6 +134,31 @@ export async function resolveSessionKeyFromResolveParams(params: {
     },
   });
   if (list.sessions.length === 0) {
+    // FALLBACK: If no active session found by label, try resolving via channel directories
+    const agentId = p.agentId ?? resolveDefaultAgentId(cfg);
+    for (const plugin of listChannelPlugins()) {
+      try {
+        const resolved = await resolveMessagingTarget({
+          cfg,
+          channel: plugin.id,
+          input: parsedLabel.label,
+        });
+        if (resolved.ok) {
+          return {
+            ok: true,
+            key: buildAgentPeerSessionKey({
+              agentId,
+              channel: plugin.id,
+              peerKind: resolved.target.kind === "user" ? "direct" : "group",
+              peerId: resolved.target.to,
+            }),
+          };
+        }
+      } catch {
+        // Ignore resolution errors for individual channels
+      }
+    }
+
     return {
       ok: false,
       error: errorShape(

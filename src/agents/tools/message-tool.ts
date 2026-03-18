@@ -622,7 +622,8 @@ function buildMessageToolDescription(options?: {
   currentChannel?: string;
   currentChannelId?: string;
 }): string {
-  const baseDescription = "Send, delete, and manage messages via channel plugins.";
+  const baseDescription =
+    "Send, delete, and manage messages via channel plugins. Use this tool for ALL messaging targets (users, groups, channels), even if they don't have an active session yet. The 'target' or 'to' parameters automatically resolve names, phone numbers, and IDs via directory search.";
 
   // If we have a current channel, show its actions and list other configured channels
   if (options?.currentChannel) {

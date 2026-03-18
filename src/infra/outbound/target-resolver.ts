@@ -277,6 +277,9 @@ async function listDirectoryEntries(params: {
 
   if (useLive && params.gateway) {
     try {
+      params.runtime?.log(
+        `[TARGET RESOLVER] gateway directory.list (query: ${params.query ?? "(none)"}, kind: ${params.kind}) via ${params.gateway.clientName}/${params.gateway.mode}`,
+      );
       const payload = await callGateway({
         config: params.cfg,
         method: "channels.directory.list",
@@ -295,8 +298,12 @@ async function listDirectoryEntries(params: {
       });
 
       if (validateChannelsDirectoryListResult(payload)) {
+        params.runtime?.log(
+          `[TARGET RESOLVER] gateway directory.list SUCCESS (${payload.entries.length} entries)`,
+        );
         return payload.entries;
       }
+      params.runtime?.log(`[TARGET RESOLVER] gateway directory.list payload INVALID`);
     } catch (err) {
       // Fallback to local if gateway fails, but usually we are here BECAUSE local won't work
       params.runtime?.log(`[TARGET RESOLVER] gateway directory.list failed: ${String(err)}`);
